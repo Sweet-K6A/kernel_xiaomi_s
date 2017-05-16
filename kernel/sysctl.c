@@ -102,6 +102,7 @@
 #ifdef CONFIG_USB
 int deny_new_usb __read_mostly = 0;
 EXPORT_SYMBOL(deny_new_usb);
+extern int deny_new_usb;
 #endif
 extern int suid_dumpable;
 #ifdef CONFIG_COREDUMP

@@ -48,6 +48,7 @@
 #define HUB_QUIRK_DISABLE_AUTOSUSPEND		BIT(1)
 
 extern int deny_new_usb;
+int deny_new_usb __read_mostly = 0;
 
 /* Protect struct usb_device->state and ->children members
  * Note: Both are also protected by ->dev.sem, except that ->state can
