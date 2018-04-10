@@ -80,6 +80,7 @@ zip
 !.gitignore
 !.mailmap
 !.cocciconfig
+!.clang-format
 
 #
 # Generated include files
