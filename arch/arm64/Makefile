@@ -261,6 +261,7 @@ $(KBUILD_DTB_IMG): dtbs
 	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
 
 all: $(KBUILD_DTB_IMG)
+
 endif
 
 PHONY += vdso_install
