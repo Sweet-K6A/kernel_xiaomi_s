@@ -192,7 +192,7 @@ u32 __pure crc32_le(u32 crc, unsigned char const *p, size_t len)
 {
 	return crc32_le_generic(crc, p, len, NULL, CRCPOLY_LE);
 }
-u32 __pure __crc32c_le(u32 crc, unsigned char const *p, size_t len)
+u32 __pure __weak __crc32c_le(u32 crc, unsigned char const *p, size_t len)
 {
 	return crc32_le_generic(crc, p, len, NULL, CRC32C_POLY_LE);
 }
@@ -208,7 +208,7 @@ u32 __pure crc32_le(u32 crc, unsigned char const *p, size_t len)
 	return crc32_le_generic(crc, p, len,
 			(const u32 (*)[256])crc32table_le, CRCPOLY_LE);
 }
-u32 __pure __crc32c_le(u32 crc, unsigned char const *p, size_t len)
+u32 __pure __weak __crc32c_le(u32 crc, unsigned char const *p, size_t len)
 {
 	return crc32_le_generic(crc, p, len, crc32ctable_le, CRC32C_POLY_LE);
 }
@@ -219,6 +219,8 @@ EXPORT_SYMBOL(__crc32c_le);
 u32 __pure crc32_le_base(u32, unsigned char const *, size_t) __alias(crc32_le);
 u32 __pure __crc32c_le_base(u32, unsigned char const *, size_t) __alias(__crc32c_le);
 u32 __pure crc32_be_base(u32, unsigned char const *, size_t) __alias(crc32_be);
+u32 crc32_le_base(u32, unsigned char const *, size_t) __alias(crc32_le);
+u32 __crc32c_le_base(u32, unsigned char const *, size_t) __alias(__crc32c_le);
 
 /*
  * This multiplies the polynomials x and y modulo the given modulus.
