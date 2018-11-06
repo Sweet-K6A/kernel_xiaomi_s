@@ -779,6 +779,10 @@ endif # CONFIG_LLVM_POLLY
 endif # $(cc-name),clang
 endif # CONFIG_CC_OPTIMIZE_FOR_SIZE
 
+ifdef CONFIG_CC_WERROR
+KBUILD_CFLAGS  += -Werror
+endif
+
 # Tell gcc to never replace conditional load with a non-conditional one
 KBUILD_CFLAGS	+= $(call cc-option,--param=allow-store-data-races=0)
 KBUILD_CFLAGS	+= $(call cc-option,-fno-allow-store-data-races)
