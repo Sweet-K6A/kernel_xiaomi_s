@@ -29,6 +29,7 @@
 #include <../base/base.h>
 #include <linux/cpu_cooling.h>
 #include <linux/kobject.h>
+#include <../base/base.h>
 
 #ifdef CONFIG_DRM
 #include <linux/msm_drm_notify.h>
