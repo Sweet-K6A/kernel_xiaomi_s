@@ -19,6 +19,7 @@ static u64 accumulate(u64 sum, u64 data)
  * instrumentation and call kasan explicitly.
  */
 unsigned int __no_sanitize_address do_csum(const unsigned char *buff, int len)
+unsigned int do_csum(const unsigned char *buff, int len)
 {
 	unsigned int offset, shift, sum;
 	const u64 *ptr;
@@ -47,6 +48,7 @@ unsigned int __no_sanitize_address do_csum(const unsigned char *buff, int len)
 	 */
 	shift = offset * 8;
 	data = *ptr++;
+	data = READ_ONCE_NOCHECK(*ptr++);
 #ifdef __LITTLE_ENDIAN
 	data = (data >> shift) << shift;
 #else
@@ -66,6 +68,10 @@ unsigned int __no_sanitize_address do_csum(const unsigned char *buff, int len)
 		tmp2 = *(__uint128_t *)(ptr + 2);
 		tmp3 = *(__uint128_t *)(ptr + 4);
 		tmp4 = *(__uint128_t *)(ptr + 6);
+		tmp1 = READ_ONCE_NOCHECK(*(__uint128_t *)ptr);
+		tmp2 = READ_ONCE_NOCHECK(*(__uint128_t *)(ptr + 2));
+		tmp3 = READ_ONCE_NOCHECK(*(__uint128_t *)(ptr + 4));
+		tmp4 = READ_ONCE_NOCHECK(*(__uint128_t *)(ptr + 6));
 
 		len -= 64;
 		ptr += 8;
@@ -90,6 +96,7 @@ unsigned int __no_sanitize_address do_csum(const unsigned char *buff, int len)
 
 		sum64 = accumulate(sum64, data);
 		tmp = *(__uint128_t *)ptr;
+		tmp = READ_ONCE_NOCHECK(*(__uint128_t *)ptr);
 
 		len -= 16;
 		ptr += 2;
@@ -105,6 +112,7 @@ unsigned int __no_sanitize_address do_csum(const unsigned char *buff, int len)
 	if (len > 0) {
 		sum64 = accumulate(sum64, data);
 		data = *ptr;
+		data = READ_ONCE_NOCHECK(*ptr);
 		len -= 8;
 	}
 	/*
