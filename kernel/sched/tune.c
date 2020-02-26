@@ -154,6 +154,7 @@ root_schedtune = {
  *    value
  */
 #define BOOSTGROUPS_COUNT 8
+#define BOOSTGROUPS_COUNT 7
 
 /* Array of configured boostgroups */
 static struct schedtune *allocated_group[BOOSTGROUPS_COUNT] = {
