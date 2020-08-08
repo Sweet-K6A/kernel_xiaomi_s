@@ -685,6 +685,8 @@ static int osm_cpufreq_cpu_init(struct cpufreq_policy *policy)
 	char tbl_name[] = "qcom,cpufreq-table-##";
 	int ret;
 	unsigned int i, cpu;
+	u32 *of_table = NULL;
+	char tbl_name[] = "qcom,cpufreq-table-##";
 
 	c = osm_configure_policy(policy);
 	if (!c) {
