@@ -498,6 +498,8 @@ struct binder_priority {
  *                        bit 1: new pending sync transaction during freezing
  *                        (protected by @inner_lock)
  * @async_recv:           process received async transactions since last frozen
+ * @is_frozen:            process is frozen and unable to service
+ *                        binder transactions
  *                        (protected by @inner_lock)
  * @freeze_wait:          waitqueue of processes waiting for all outstanding
  *                        transactions to be processed
@@ -2993,6 +2995,7 @@ static int binder_proc_transaction(struct binder_transaction *t,
 
 	if ((proc->is_frozen && !oneway) || proc->is_dead ||
 			(thread && thread->is_dead)) {
+	if (proc->is_frozen || proc->is_dead || (thread && thread->is_dead)) {
 		bool proc_is_dead = proc->is_dead
 			|| (thread && thread->is_dead);
 		binder_inner_proc_unlock(proc);
@@ -3647,6 +3650,9 @@ static void binder_transaction(struct binder_proc *proc,
 		binder_inner_proc_lock(target_proc);
 		if (target_thread->is_dead) {
 			return_error = BR_DEAD_REPLY;
+		if (target_thread->is_dead || target_proc->is_frozen) {
+			return_error = target_proc->is_dead ?
+				BR_DEAD_REPLY : BR_FROZEN_REPLY;
 			binder_inner_proc_unlock(target_proc);
 			goto err_dead_proc_or_thread;
 		}
@@ -5341,6 +5347,8 @@ static long binder_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		int target_procs_count = 0, i = 0;
 
 		ret = 0;
+		struct binder_proc *target_proc;
+		bool found = false;
 
 		if (copy_from_user(&info, ubuf, sizeof(info))) {
 			ret = -EFAULT;
@@ -5391,6 +5399,50 @@ static long binder_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 		kfree(target_procs);
 
+		mutex_lock(&binder_procs_lock);
+		hlist_for_each_entry(target_proc, &binder_procs, proc_node) {
+			if (target_proc->pid == info.pid) {
+				found = true;
+				binder_inner_proc_lock(target_proc);
+				atomic_inc(&target_proc->tmp_ref);
+				binder_inner_proc_unlock(target_proc);
+				break;
+			}
+		}
+		mutex_unlock(&binder_procs_lock);
+		if (!found) {
+			ret = -EINVAL;
+			goto err;
+		}
+		if (!info.enable) {
+			binder_inner_proc_lock(target_proc);
+			target_proc->is_frozen = false;
+			binder_inner_proc_unlock(target_proc);
+			binder_proc_dec_tmpref(target_proc);
+			break;
+		}
+		/*
+		 * Freezing the target. Prevent new transactions by
+		 * setting frozen state. If timeout specified, wait
+		 * for transactions to drain.
+		 */
+		binder_inner_proc_lock(target_proc);
+		target_proc->is_frozen = true;
+		binder_inner_proc_unlock(target_proc);
+		if (info.timeout_ms > 0)
+			ret = wait_event_interruptible_timeout(
+				target_proc->freeze_wait,
+				(!target_proc->outstanding_txns),
+				msecs_to_jiffies(info.timeout_ms));
+		if (!ret && target_proc->outstanding_txns) {
+			ret = -EAGAIN;
+		}
+		if (ret < 0) {
+			binder_inner_proc_lock(target_proc);
+			target_proc->is_frozen = false;
+			binder_inner_proc_unlock(target_proc);
+		}
+		binder_proc_dec_tmpref(target_proc);
 		if (ret < 0)
 			goto err;
 		break;
