@@ -407,6 +407,7 @@ static void debug_low_async_space_locked(struct binder_alloc *alloc, int pid)
 	return false;
 	}
 	return false;
+	}
 }
 
 static struct binder_buffer *binder_alloc_new_buf_locked(
