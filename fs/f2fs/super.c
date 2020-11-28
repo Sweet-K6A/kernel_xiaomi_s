@@ -2717,6 +2717,31 @@ int f2fs_quota_sync(struct super_block *sb, int type)
 	struct quota_info *dqopt = sb_dqopt(sb);
 	int cnt;
 	int ret = 0;
+	int ret;
+
+	/*
+	 * do_quotactl
+	 *  f2fs_quota_sync
+	 *  down_read(quota_sem)
+	 *  dquot_writeback_dquots()
+	 *  f2fs_dquot_commit
+	 *                            block_operation
+	 *                            down_read(quota_sem)
+	 *
+	 * However, we cannot use the cp_rwsem to prevent this
+	 * deadlock, as the cp_rwsem is taken for read inside the
+	 * f2fs_dquot_commit code, and rwsem is not recursive.
+	 *
+	 * We therefore use a special lock to synchronize
+	 * f2fs_quota_sync with block_operations, as this is the only
+	 * place where such recursion occurs.
+	 */
+	down_read(&sbi->cp_quota_rwsem);
+
+	down_read(&sbi->quota_sem);
+	ret = dquot_writeback_dquots(sb, type);
+	if (ret)
+		goto out;
 
 	/*
 	 * Now when everything is written we can discard the pagecache so
@@ -2764,6 +2789,11 @@ int f2fs_quota_sync(struct super_block *sb, int type)
 		if (ret)
 			break;
 	}
+out:
+	if (ret)
+		set_sbi_flag(F2FS_SB(sb), SBI_QUOTA_NEED_REPAIR);
+	up_read(&sbi->quota_sem);
+	up_read(&sbi->cp_quota_rwsem);
 	return ret;
 }
 
@@ -4127,6 +4157,34 @@ try_onemore:
 	init_f2fs_rwsem(&sbi->cp_rwsem);
 	init_f2fs_rwsem(&sbi->quota_sem);
 	init_f2fs_rwsem(&sbi->cp_quota_rwsem);
+	for (i = 0; i < NR_PAGE_TYPE; i++) {
+		int n = (i == META) ? 1: NR_TEMP_TYPE;
+		int j;
+
+		sbi->write_io[i] =
+			f2fs_kmalloc(sbi,
+				     array_size(n,
+						sizeof(struct f2fs_bio_info)),
+				     GFP_KERNEL);
+		if (!sbi->write_io[i]) {
+			err = -ENOMEM;
+			goto free_bio_info;
+		}
+
+		for (j = HOT; j < n; j++) {
+			init_rwsem(&sbi->write_io[i][j].io_rwsem);
+			sbi->write_io[i][j].sbi = sbi;
+			sbi->write_io[i][j].bio = NULL;
+			spin_lock_init(&sbi->write_io[i][j].io_lock);
+			INIT_LIST_HEAD(&sbi->write_io[i][j].io_list);
+			INIT_LIST_HEAD(&sbi->write_io[i][j].bio_list);
+			init_rwsem(&sbi->write_io[i][j].bio_list_lock);
+		}
+	}
+
+	init_rwsem(&sbi->cp_rwsem);
+	init_rwsem(&sbi->quota_sem);
+	init_rwsem(&sbi->cp_quota_rwsem);
 	init_waitqueue_head(&sbi->cp_wait);
 	init_sb_info(sbi);
 

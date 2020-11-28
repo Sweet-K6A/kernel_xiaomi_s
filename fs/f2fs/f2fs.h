@@ -1646,6 +1646,11 @@ struct f2fs_sb_info {
 	struct f2fs_rwsem node_write;		/* locking node writes */
 	struct f2fs_rwsem node_change;	/* locking node change */
 	struct f2fs_rwsem cp_quota_rwsem;    	/* blocking quota sync operations */
+	struct mutex cp_mutex;			/* checkpoint procedure lock */
+	struct rw_semaphore cp_rwsem;		/* blocking FS operations */
+	struct rw_semaphore cp_quota_rwsem;    	/* blocking quota sync operations */
+	struct rw_semaphore node_write;		/* locking node writes */
+	struct rw_semaphore node_change;	/* locking node change */
 	wait_queue_head_t cp_wait;
 	unsigned long last_time[MAX_TIME];	/* to store time in jiffies */
 	long interval_time[MAX_TIME];		/* to store thresholds */
@@ -2234,12 +2239,16 @@ static inline void f2fs_lock_all(struct f2fs_sb_info *sbi)
 {
 	f2fs_down_write(&sbi->cp_quota_rwsem);
 	f2fs_down_write(&sbi->cp_rwsem);
+	down_write(&sbi->cp_quota_rwsem);
+	down_write(&sbi->cp_rwsem);
 }
 
 static inline void f2fs_unlock_all(struct f2fs_sb_info *sbi)
 {
 	f2fs_up_write(&sbi->cp_rwsem);
 	f2fs_up_write(&sbi->cp_quota_rwsem);
+	up_write(&sbi->cp_rwsem);
+	up_write(&sbi->cp_quota_rwsem);
 }
 
 static inline int __get_cp_reason(struct f2fs_sb_info *sbi)
