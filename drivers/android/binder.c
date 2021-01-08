@@ -1,4 +1,4 @@
-/* binder.c
+w/* binder.c
  *
  * Android IPC Subsystem
  *
@@ -5238,6 +5238,9 @@ static int binder_ioctl_get_freezer_info(
 	info->sync_recv = 0;
 	info->async_recv = 0;
 
+	info->sync_recv = 0;
+	info->async_recv = 0;
+
 	mutex_lock(&binder_procs_lock);
 	hlist_for_each_entry(target_proc, &binder_procs, proc_node) {
 		if (target_proc->pid == info->pid) {
@@ -5253,21 +5256,15 @@ static int binder_ioctl_get_freezer_info(
 			info->async_recv |= target_proc->async_recv;
 			binder_inner_proc_unlock(target_proc);
 			target_proc->tmp_ref++;
+			info->sync_recv |= target_proc->sync_recv;
+			info->async_recv |= target_proc->async_recv;
 			binder_inner_proc_unlock(target_proc);
-			break;
 		}
 	}
 	mutex_unlock(&binder_procs_lock);
 
 	if (!found)
 		return -EINVAL;
-
-	binder_inner_proc_lock(target_proc);
-	info->sync_recv = target_proc->sync_recv;
-	info->async_recv = target_proc->async_recv;
-	binder_inner_proc_unlock(target_proc);
-
-	binder_proc_dec_tmpref(target_proc);
 
 	return 0;
 }
@@ -5399,7 +5396,7 @@ static long binder_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		struct binder_proc *target_proc;
 		ret = -EINVAL;
 		struct binder_proc *target_proc;
-		bool found = false;
+		ret = -EINVAL;
 
 		if (copy_from_user(&info, ubuf, sizeof(info))) {
 			ret = -EFAULT;
@@ -5497,51 +5494,22 @@ static long binder_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		mutex_lock(&binder_procs_lock);
 		hlist_for_each_entry(target_proc, &binder_procs, proc_node) {
 			if (target_proc->pid == info.pid) {
-				found = true;
 				binder_inner_proc_lock(target_proc);
 				atomic_inc(&target_proc->tmp_ref);
 				binder_inner_proc_unlock(target_proc);
-				break;
+
+				mutex_unlock(&binder_procs_lock);
+				ret = binder_ioctl_freeze(&info, target_proc);
+				mutex_lock(&binder_procs_lock);
+
+				binder_proc_dec_tmpref(target_proc);
+
+				if (ret < 0)
+					break;
 			}
 		}
 		mutex_unlock(&binder_procs_lock);
-		if (!found) {
-			ret = -EINVAL;
-			goto err;
-		}
-		if (!info.enable) {
-			binder_inner_proc_lock(target_proc);
-			target_proc->sync_recv = false;
-			target_proc->async_recv = false;
-			target_proc->is_frozen = false;
-			binder_inner_proc_unlock(target_proc);
-			binder_proc_dec_tmpref(target_proc);
-			break;
-		}
-		/*
-		 * Freezing the target. Prevent new transactions by
-		 * setting frozen state. If timeout specified, wait
-		 * for transactions to drain.
-		 */
-		binder_inner_proc_lock(target_proc);
-		target_proc->sync_recv = false;
-		target_proc->async_recv = false;
-		target_proc->is_frozen = true;
-		binder_inner_proc_unlock(target_proc);
-		if (info.timeout_ms > 0)
-			ret = wait_event_interruptible_timeout(
-				target_proc->freeze_wait,
-				(!target_proc->outstanding_txns),
-				msecs_to_jiffies(info.timeout_ms));
-		if (!ret && target_proc->outstanding_txns) {
-			ret = -EAGAIN;
-		}
-		if (ret < 0) {
-			binder_inner_proc_lock(target_proc);
-			target_proc->is_frozen = false;
-			binder_inner_proc_unlock(target_proc);
-		}
-		binder_proc_dec_tmpref(target_proc);
+
 		if (ret < 0)
 			goto err;
 		break;
