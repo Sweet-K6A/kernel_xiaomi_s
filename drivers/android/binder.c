@@ -4440,6 +4440,7 @@ retry:
 				cmd = BR_TRANSACTION_COMPLETE;
 			binder_inner_proc_unlock(proc);
 			kmem_cache_free(binder_work_pool, w);
+			kfree(w);
 			binder_stats_deleted(BINDER_STAT_TRANSACTION_COMPLETE);
 			if (put_user(cmd, (uint32_t __user *)ptr))
 				return -EFAULT;
@@ -5481,6 +5482,7 @@ static long binder_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 		if (copy_from_user(&enable, ubuf, sizeof(enable))) {
 			ret = -EFAULT;
+			ret = -EINVAL;
 			goto err;
 		}
 		binder_inner_proc_lock(proc);
