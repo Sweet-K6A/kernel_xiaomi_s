@@ -286,6 +286,8 @@ struct binder_frozen_status_info {
 
 	/* process received async transactions since last frozen */
 	__u32            sync_recv;
+
+	/* process received async transactions since last frozen */
 	__u32            async_recv;
 };
 
