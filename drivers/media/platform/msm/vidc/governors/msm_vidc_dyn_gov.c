@@ -930,6 +930,13 @@ static int __get_target_freq(struct devfreq *dev, unsigned long *freq)
 	if (!vidc_data || !vidc_data->data_count)
 		goto exit;
 
+	for (c = 0; c < vidc_data->data_count; ++c) {
+		if (vidc_data->data[c].power_mode == VIDC_POWER_TURBO) {
+			ab_kbps = INT_MAX;
+			goto exit;
+		}
+	}
+
 	for (c = 0; c < vidc_data->data_count; ++c)
 		ab_kbps += __calculate(&vidc_data->data[c], gov->mode);
 
