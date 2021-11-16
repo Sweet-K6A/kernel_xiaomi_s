@@ -36,103 +36,6 @@ static struct kmem_cache *ashmem_area_cachep __read_mostly;
 #define PROT_MASK		(PROT_EXEC | PROT_READ | PROT_WRITE)
 
 /**
- * lru_add() - Adds a range of memory to the LRU list
- * @range:     The memory range being added.
- *
- * The range is first added to the end (tail) of the LRU list.
- * After this, the size of the range is added to @lru_count
- */
-static inline void lru_add(struct ashmem_range *range)
-{
-	list_add_tail(&range->lru, &ashmem_lru_list);
-	lru_count += range_size(range);
-}
-
-/**
- * lru_del() - Removes a range of memory from the LRU list
- * @range:     The memory range being removed
- *
- * The range is first deleted from the LRU list.
- * After this, the size of the range is removed from @lru_count
- */
-static inline void lru_del(struct ashmem_range *range)
-{
-	list_del(&range->lru);
-	lru_count -= range_size(range);
-}
-
-/**
- * range_alloc() - Allocates and initializes a new ashmem_range structure
- * @asma:	   The associated ashmem_area
- * @prev_range:	   The previous ashmem_range in the sorted asma->unpinned list
- * @purged:	   Initial purge status (ASMEM_NOT_PURGED or ASHMEM_WAS_PURGED)
- * @start:	   The starting page (inclusive)
- * @end:	   The ending page (inclusive)
- *
- * This function is protected by ashmem_mutex.
- *
- * Return: 0 if successful, or -ENOMEM if there is an error
- */
-static int range_alloc(struct ashmem_area *asma,
-		       struct ashmem_range *prev_range, unsigned int purged,
-		       size_t start, size_t end)
-{
-	struct ashmem_range *range;
-
-	range = kmem_cache_zalloc(ashmem_range_cachep, GFP_KERNEL);
-	if (unlikely(!range))
-		return -ENOMEM;
-
-	range->asma = asma;
-	range->pgstart = start;
-	range->pgend = end;
-	range->purged = purged;
-
-	list_add_tail(&range->unpinned, &prev_range->unpinned);
-
-	if (range_on_lru(range))
-		lru_add(range);
-
-	return 0;
-}
-
-/**
- * range_del() - Deletes and dealloctes an ashmem_range structure
- * @range:	 The associated ashmem_range that has previously been allocated
- */
-static void range_del(struct ashmem_range *range)
-{
-	list_del(&range->unpinned);
-	if (range_on_lru(range))
-		lru_del(range);
-	kmem_cache_free(ashmem_range_cachep, range);
-}
-
-/**
- * range_shrink() - Shrinks an ashmem_range
- * @range:	    The associated ashmem_range being shrunk
- * @start:	    The starting byte of the new range
- * @end:	    The ending byte of the new range
- *
- * This does not modify the data inside the existing range in any way - It
- * simply shrinks the boundaries of the range.
- *
- * Theoretically, with a little tweaking, this could eventually be changed
- * to range_resize, and expand the lru_count if the new range is larger.
- */
-static inline void range_shrink(struct ashmem_range *range,
-				size_t start, size_t end)
-{
-	size_t pre = range_size(range);
-
-	range->pgstart = start;
-	range->pgend = end;
-
-	if (range_on_lru(range))
-		lru_count -= pre - range_size(range);
-}
-
-/**
  * ashmem_open() - Opens an Anonymous Shared Memory structure
  * @inode:	   The backing file's index node(?)
  * @file:	   The backing file
@@ -342,6 +245,7 @@ static int ashmem_mmap(struct file *file, struct vm_area_struct *vma)
 	/* user needs to SET_SIZE before mapping */
 	size = READ_ONCE(asma->size);
 	if (!size)
+	if (unlikely(!size))
 		return -EINVAL;
 
 	/* requested mapping size larger than object size */
@@ -352,6 +256,8 @@ static int ashmem_mmap(struct file *file, struct vm_area_struct *vma)
 	prot_mask = READ_ONCE(asma->prot_mask);
 	if ((vma->vm_flags & ~calc_vm_prot_bits(prot_mask, 0)) &
 		     calc_vm_prot_bits(PROT_MASK, 0))
+	if (unlikely((vma->vm_flags & ~calc_vm_prot_bits(prot_mask, 0)) &
+		     calc_vm_prot_bits(PROT_MASK, 0)))
 		return -EPERM;
 
 	vma->vm_flags &= ~calc_vm_may_flags(~prot_mask);
@@ -390,6 +296,8 @@ static int set_prot_mask(struct ashmem_area *asma, unsigned long prot)
 		ret = -EINVAL;
 		goto out;
 	}
+	if (unlikely((READ_ONCE(asma->prot_mask) & prot) != prot))
+		return -EINVAL;
 
 	/* does the application expect PROT_READ to imply PROT_EXEC? */
 	if ((prot & PROT_READ) && (current->personality & READ_IMPLIES_EXEC))
@@ -728,14 +636,6 @@ static int __init ashmem_init(void)
 		pr_err("failed to create slab cache\n");
 		ret = -ENOMEM;
 		goto out;
-	}
-
-	ashmem_range_cachep = kmem_cache_create("ashmem_range_cache",
-						sizeof(struct ashmem_range),
-						0, 0, NULL);
-	if (unlikely(!ashmem_range_cachep)) {
-		pr_err("failed to create slab cache\n");
-		goto out_free1;
 	}
 
 	ret = misc_register(&ashmem_misc);
