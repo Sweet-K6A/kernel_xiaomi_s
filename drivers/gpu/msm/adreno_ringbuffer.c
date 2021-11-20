@@ -123,12 +123,36 @@ static void adreno_ringbuffer_wptr(struct adreno_device *adreno_dev,
 	spin_unlock_irqrestore(&rb->preempt_lock, flags);
 
 	/*
+<<<<<<< HEAD
 	 * Ensure the write posted after a possible
 	 * GMU wakeup (write could have dropped during wakeup)
 	 */
 	if (write)
 		ret = adreno_gmu_fenced_write(adreno_dev, ADRENO_REG_CP_RB_WPTR,
 			val, FENCE_STATUS_WRITEDROPPED0_MASK);
+=======
+	 * Ensure the write posted after a possible GMU wakeup (write could have
+	 * dropped during wakeup)
+	 */
+	if (write) {
+		/*
+		 * There could be a situation where GPU comes out of ifpc after
+		 * a fenced write but before reading AHB_FENCE_STATUS from KMD,
+		 * it goes back to ifpc due to inactivity (kernel scheduler
+		 * plays a role here). Put a keep alive vote to avoid such an
+		 * unlikely scenario.
+		 */
+		if (gpudev->gpu_keepalive)
+			gpudev->gpu_keepalive(adreno_dev, true);
+
+		ret = adreno_gmu_fenced_write(adreno_dev, ADRENO_REG_CP_RB_WPTR,
+					      val,
+					      FENCE_STATUS_WRITEDROPPED0_MASK);
+
+		if (gpudev->gpu_keepalive)
+			gpudev->gpu_keepalive(adreno_dev, false);
+	}
+>>>>>>> 821edcbf13a4 (msm: kgsl: Avoid busy waiting for fenced GMU writes)
 
 	if (ret) {
 		/* If WPTR update fails, set the fault and trigger recovery */
