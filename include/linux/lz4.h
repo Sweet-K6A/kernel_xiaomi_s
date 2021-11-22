@@ -57,6 +57,7 @@
  */
 /* We only use LZ4 for zRAM, so the blocks are 4KB in size. 1KB is enough here */
 #define LZ4_MEMORY_USAGE 10
+#define LZ4_MEMORY_USAGE 16
 
 #define LZ4_MAX_INPUT_SIZE	0x7E000000 /* 2 113 929 216 bytes */
 #define LZ4_COMPRESSBOUND(isize)	(\
