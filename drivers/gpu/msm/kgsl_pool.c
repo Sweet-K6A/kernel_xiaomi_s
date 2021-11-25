@@ -89,6 +89,7 @@ _kgsl_pool_zero_page(struct page *p, unsigned int pool_order,
 
 	for (i = 0; i < (1 << pool_order); i++) {
 		struct page *page = nth_page(p, i);
+
 		clear_highpage(page);
 	}
 
@@ -412,6 +413,7 @@ int kgsl_pool_alloc_page(int *page_size, struct page **pages,
 
 done:
 	_kgsl_pool_zero_page(page, order, dev);
+
 	for (j = 0; j < (*page_size >> PAGE_SHIFT); j++) {
 		p = nth_page(page, j);
 		pages[pcount] = p;
