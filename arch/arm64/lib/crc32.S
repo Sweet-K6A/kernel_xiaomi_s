@@ -149,20 +149,25 @@ CPU_BE(	rev		x6, x6		)
 
 8:	tbz		x2, #3, 4f
 	ldr		x3, [x1], #8
-CPU_BE(	rev		x3, x3		)
+	byteorder	x3, \be
+	bitorder	x3, \be
 	crc32\c\()x	w0, w0, x3
 4:	tbz		x2, #2, 2f
 	ldr		w3, [x1], #4
-CPU_BE(	rev		w3, w3		)
+	byteorder	w3, \be
+	bitorder	w3, \be
 	crc32\c\()w	w0, w0, w3
 2:	tbz		x2, #1, 1f
 	ldrh		w3, [x1], #2
-CPU_BE(	rev16		w3, w3		)
+	byteorder16	w3, \be
+	bitorder16	w3, \be
 	crc32\c\()h	w0, w0, w3
 1:	tbz		x2, #0, 0f
 	ldrb		w3, [x1]
+	bitorder8	w3, \be
 	crc32\c\()b	w0, w0, w3
-0:	ret
+0:	bitorder	w0, \be
+	ret
 	.endm
 
 	.align		5
@@ -187,3 +192,8 @@ alternative_if_not ARM64_HAS_CRC32
 alternative_else_nop_endif
 	__crc32		c
 ENDPROC(__crc32c_le)
+alternative_if_not ARM64_HAS_CRC32
+	b		crc32_be_base
+alternative_else_nop_endif
+	__crc32		be=1
+ENDPROC(crc32_be)
